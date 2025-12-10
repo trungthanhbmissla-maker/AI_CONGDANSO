@@ -13,14 +13,20 @@ load_dotenv()
 app = Flask(__name__)
 CORS(app)
 
+# ============================
+# 🔐 NẠP GOOGLE API KEY AN TOÀN
+# ============================
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
-if not GOOGLE_API_KEY or GOOGLE_API_KEY.strip() == "":
-    GOOGLE_API_KEY = "AIzaSyD0zS4tkhhWin5sSFQZ5C32MWTuQYr4xC8"
-    print("⚠️ Không tìm thấy GOOGLE_API_KEY trong .env → đang dùng key dự phòng trong code.")
 
 if not GOOGLE_API_KEY:
-    raise ValueError("❌ Không tìm thấy GOOGLE_API_KEY. Vui lòng đặt trong file .env hoặc trong code fallback.")
+    raise RuntimeError(
+        "❌ Không tìm thấy GOOGLE_API_KEY trong biến môi trường! "
+        "Hãy khai báo trong Render → Environment."
+    )
 
+# ============================
+# ⚙️ CẤU HÌNH GEMINI API
+# ============================
 try:
     genai.configure(api_key=GOOGLE_API_KEY)
     print("✅ Cấu hình Gemini API thành công.")
