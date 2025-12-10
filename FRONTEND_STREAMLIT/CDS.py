@@ -9,7 +9,7 @@ from pathlib import Path
 
 # đảm bảo luôn có URL mặc định
 if "BACKEND_URL" not in st.session_state or not st.session_state["BACKEND_URL"]:
-    st.session_state["BACKEND_URL"] = "http://127.0.0.1:8000"
+    st.session_state["BACKEND_URL"] = https://ai-congdanso-backend.onrender.com/"http://127.0.0.1:8000"
 
 # ===================== CẤU HÌNH TRANG =====================
 PRIMARY_COLOR = "#004A8F"
@@ -142,7 +142,7 @@ with st.sidebar:
     )
     backend_input = st.text_input(
         "Backend URL",
-        value=st.session_state.get('BACKEND_URL', "http://127.0.0.1:8000")
+        value=st.session_state.get('BACKEND_URL', "https://ai-congdanso-backend.onrender.com/")
     )
     if backend_input:
         st.session_state['BACKEND_URL'] = backend_input
