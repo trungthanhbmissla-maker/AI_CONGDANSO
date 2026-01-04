@@ -29,16 +29,10 @@ except Exception as e:
     raise
 
 MODELS_TO_TRY = [
-    "gemini-2.5-pro",
     "gemini-2.5-flash",
+    "gemini-2.5-pro",
     "gemini-2.0-flash-lite",
-    "gemini-2.0-flash-lite-001",
-    "gemini-2.5-pro-preview-tts",
-    "gemini-2.5-flash-lite",
-    "gemini-2.5-flash-lite-preview-09-2025",
-    "gemini-2.5-computer-use-preview-10-2025"
-    "gemini-3-flash-preview",
-    "gemini-3-pro-preview"
+    "gemini-2.0-flash-lite-001"
 ]
 
 # ====================================================
@@ -473,3 +467,4 @@ def home():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8000))
     app.run(host="0.0.0.0", port=port, debug=False)
+
