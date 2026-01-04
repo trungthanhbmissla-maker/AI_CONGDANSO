@@ -13,20 +13,14 @@ load_dotenv()
 app = Flask(__name__)
 CORS(app)
 
-# ============================
-# 🔐 NẠP GOOGLE API KEY AN TOÀN
-# ============================
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
+if not GOOGLE_API_KEY or GOOGLE_API_KEY.strip() == "":
+    GOOGLE_API_KEY = "AIzaSyxxxxxxxxxxxxxxxxxxxxxxxxxxxx" #Đưa lên onrender cần thay đổi để không lộ key
+    print("⚠️ Không tìm thấy GOOGLE_API_KEY trong .env → đang dùng key dự phòng trong code.")
 
 if not GOOGLE_API_KEY:
-    raise RuntimeError(
-        "❌ Không tìm thấy GOOGLE_API_KEY trong biến môi trường! "
-        "Hãy khai báo trong Render → Environment."
-    )
+    raise ValueError("❌ Không tìm thấy GOOGLE_API_KEY. Vui lòng đặt trong file .env hoặc trong code fallback.")
 
-# ============================
-# ⚙️ CẤU HÌNH GEMINI API
-# ============================
 try:
     genai.configure(api_key=GOOGLE_API_KEY)
     print("✅ Cấu hình Gemini API thành công.")
@@ -35,21 +29,22 @@ except Exception as e:
     raise
 
 MODELS_TO_TRY = [
-    "gemini-2.5-flash",
     "gemini-2.5-pro",
+    "gemini-2.5-flash",
     "gemini-2.0-flash-lite",
     "gemini-2.0-flash-lite-001",
+    "gemini-2.5-pro-preview-tts",
     "gemini-2.5-flash-lite",
     "gemini-2.5-flash-lite-preview-09-2025",
-    "gemini-2.5-computer-use-preview-10-2025",
-    "gemini-2.5-pro-preview-tts"
-
+    "gemini-2.5-computer-use-preview-10-2025"
+    "gemini-3-flash-preview",
+    "gemini-3-pro-preview"
 ]
 
 # ====================================================
 # 2️⃣ Hàm gọi Gemini an toàn
 # ====================================================
-def generate_text(prompt, safety_settings=None, generation_config=None):
+'''def generate_text(prompt, safety_settings=None, generation_config=None):
     """
     Gọi Gemini an toàn với nhiều fallback:
     - hỗ trợ response.candidates[*].content.parts (cũ)
@@ -135,7 +130,58 @@ def generate_text(prompt, safety_settings=None, generation_config=None):
                     "Xin thử lại sau hoặc liên hệ quản trị viên. "
                     "Chi tiết lỗi: " + (last_error or "unknown"))
     print(fallback_msg)
-    return fallback_msg
+    return fallback_msg'''
+def generate_text(prompt, safety_settings=None, generation_config=None):
+    #raise RuntimeError("🔥 ĐANG VÀO generate_text MỚI 🔥")
+    safety_settings = safety_settings or []
+    generation_config = generation_config or {
+        "max_output_tokens": 300,
+        "temperature": 0.8
+    }
+
+    last_error = None
+
+    for model_name in MODELS_TO_TRY:
+        print(f"🔄 ĐANG THỬ MODEL: {model_name}")
+
+        try:
+            model = genai.GenerativeModel(model_name=model_name)
+            response = model.generate_content(
+                prompt,
+                safety_settings=safety_settings,
+                generation_config=generation_config,
+            )
+
+            # ===== LẤY TEXT =====
+            if hasattr(response, "text") and response.text:
+                print(f"✅ OK: response.text từ {model_name}")
+                return response.text.strip()
+
+            if hasattr(response, "candidates") and response.candidates:
+                c = response.candidates[0]
+                if hasattr(c, "content") and hasattr(c.content, "parts"):
+                    text = "".join(p.text for p in c.content.parts if hasattr(p, "text"))
+                    if text.strip():
+                        print(f"✅ OK: candidates.parts từ {model_name}")
+                        return text.strip()
+
+            raise ValueError("Không có text hợp lệ trong response")
+
+        except ResourceExhausted as e:
+            print(f"⚠️ QUOTA HẾT tại {model_name}: {e}")
+            last_error = f"ResourceExhausted:{model_name}"
+            continue
+
+        except Exception as e:
+            print(f"❌ MODEL {model_name} LỖI: {type(e).__name__} | {e}")
+            last_error = f"{model_name}:{e}"
+            continue
+
+    return (
+        "⚠️ Hệ thống AI hiện không khả dụng.\n"
+        "Vui lòng thử lại sau.\n"
+        f"Chi tiết lỗi cuối: {last_error}"
+    )
 # ====================================================
 # 🛰️ TRẠM 1 – KHAI THÁC DỮ LIỆU & THÔNG TIN
 # ====================================================
@@ -150,25 +196,47 @@ def station1_info_literacy():
 
         if mode == "generate_task":
             prompt = f"""
-            Bạn là AI giáo dục CHIRON26 giúp học sinh huấn luyện năng lực khai thác dữ liệu và thông tin.
-            Hãy tạo **2 câu hỏi trắc nghiệm ngắn** (mỗi câu 2–4 câu mô tả + câu hỏi có 2 lựa chọn A/B)
-            xoay quanh chủ đề "{topic}". Mỗi câu nên có tình huống nhỏ về tin giả, thông tin sai lệch
-            và yêu cầu học sinh xác minh nguồn tin.
+            Bạn là AI giáo dục CHIRON26 giúp học sinh rèn luyện kỹ năng xác thực thông tin.
+            Hãy tạo **2 câu hỏi trắc nghiệm A/B** xoay quanh chủ đề "{topic}" (tin giả, thông tin sai lệch).
+            
+            Cấu trúc bắt buộc:
+            TÌNH HUỐNG 1: [Mô tả ngắn gọn về một tin đồn/tin giả]
+            CÂU HỎI: [Câu hỏi về hành động nên làm]
+            A. [Hành động sai/thiếu kiểm chứng]
+            B. [Hành động đúng/kiểm chứng nguồn tin]
+            
+            (Tương tự cho Tình huống 2)
+            
+            QUAN TRỌNG: KHÔNG được kèm theo đáp án đúng hay lời giải thích ở cuối (để học sinh tự làm).
             """
             result = generate_text(prompt, generation_config={"max_output_tokens": 2048, "temperature": 0.8})
             return jsonify({"station": 1, "response": result})
 
         elif mode == "evaluate":
             prompt = f"""
-            Dưới đây là nhiệm vụ gốc:
+            Bạn là giám khảo chấm thi trắc nghiệm kỹ năng thông tin.
+            
+            1. ĐỀ BÀI:
             {task}
 
-            Câu trả lời của học sinh:
+            2. HỌC SINH CHỌN:
             {answer}
 
-            Hãy **chấm điểm và phản hồi chi tiết** (2–3 câu), khuyến khích học sinh cải thiện.
+            3. YÊU CẦU CHẤM:
+            - Xác định đáp án đúng của từng tình huống (Đáp án đúng là hành động kiểm chứng thông tin, tìm nguồn chính thống).
+            - So sánh với lựa chọn của học sinh.
+            - Tính tổng số câu đúng (trên 2 câu).
+
+            4. ĐỊNH DẠNG TRẢ LỜI BẮT BUỘC (Dòng đầu tiên):
+            SCORE: x/2
+            
+            (Trong đó x là số câu đúng. Ví dụ: SCORE: 0/2, SCORE: 1/2, SCORE: 2/2).
+            
+            Sau dòng SCORE mới được viết giải thích chi tiết vì sao đúng/sai.
             """
-            result = generate_text(prompt, generation_config={"max_output_tokens": 2048, "temperature": 0.7})
+            
+            # Giảm temperature xuống 0.5 để chấm điểm chính xác, không "văn vở"
+            result = generate_text(prompt, generation_config={"max_output_tokens": 2048, "temperature": 0.5})
             return jsonify({"station": 1, "feedback": result})
 
         else:
@@ -259,25 +327,50 @@ def station4_safety():
         task = data.get("task", "")
 
         if mode == "generate_task":
+            # Thêm yêu cầu KHÔNG kèm đáp án để tránh lộ
             prompt = """
-            Bạn là AI giáo dục CHIRON26 giúp học sinh huấn luyện kỹ năng an toàn số cho học sinh.
-            Hãy tạo **2 tình huống ngắn (2–3 câu)** về bảo mật tài khoản, lừa đảo trực tuyến,
-            hoặc khi bị bắt nạt mạng. Mỗi tình huống có câu hỏi trắc nghiệm A/B.
+            Bạn là AI giáo dục CHIRON26 giúp học sinh huấn luyện kỹ năng an toàn số.
+            Hãy tạo **2 tình huống trắc nghiệm ngắn** về: bảo mật tài khoản, lừa đảo trực tuyến (phishing), hoặc bắt nạt mạng.
+            
+            Cấu trúc bắt buộc:
+            TÌNH HUỐNG 1: [Nội dung]
+            CÂU HỎI: [Câu hỏi]
+            A. [Lựa chọn 1]
+            B. [Lựa chọn 2]
+            
+            (Tương tự cho Tình huống 2)
+            QUAN TRỌNG: KHÔNG được viết đáp án đúng hay giải thích ở cuối.
             """
             result = generate_text(prompt, generation_config={"max_output_tokens": 2048, "temperature": 0.8})
             return jsonify({"station": 4, "response": result})
 
         elif mode == "evaluate":
+            # --- SỬA QUAN TRỌNG TẠI ĐÂY ---
             prompt = f"""
-            Nhiệm vụ:
+            Bạn là giám khảo chấm thi trắc nghiệm về AN TOÀN SỐ.
+            
+            1. ĐỀ BÀI:
             {task}
 
-            Câu trả lời của học sinh:
+            2. HỌC SINH CHỌN:
             {answer}
 
-            Hãy chấm và phản hồi thân thiện, nhấn mạnh hành vi an toàn số đúng.
+            3. YÊU CẦU:
+            - Xác định đáp án đúng dựa trên kiến thức an toàn thông tin.
+            - So sánh với đáp án học sinh chọn.
+            - Đếm số câu đúng (trên tổng số 2 câu).
+
+            4. ĐỊNH DẠNG TRẢ LỜI BẮT BUỘC (Dòng đầu tiên):
+            SCORE: x/2
+            
+            (Trong đó x là số câu đúng. Ví dụ: SCORE: 0/2, SCORE: 1/2, SCORE: 2/2).
+            
+            Sau dòng SCORE mới được viết phần giải thích chi tiết đúng/sai cho từng câu.
+            KHÔNG chúc mừng nếu học sinh làm sai.
             """
-            result = generate_text(prompt, generation_config={"max_output_tokens": 2048, "temperature": 0.7})
+            
+            # Giảm temperature xuống 0.5 để AI chấm nghiêm túc hơn, ít "sáng tạo" lung tung
+            result = generate_text(prompt, generation_config={"max_output_tokens": 2048, "temperature": 0.5})
             return jsonify({"station": 4, "feedback": result})
 
         else:
@@ -286,7 +379,6 @@ def station4_safety():
     except Exception as e:
         print("❌ Lỗi trạm 4:", e)
         return jsonify({"error": str(e)}), 500
-
 
 # ====================================================
 # 🧩 TRẠM 5 – GIẢI QUYẾT VẤN ĐỀ
@@ -316,7 +408,8 @@ def station5_problem_solving():
             Câu trả lời của học sinh:
             {answer}
 
-            Hãy phản hồi logic, khuyến khích học sinh áp dụng quy trình: xác định nguyên nhân – thử giải pháp – đánh giá kết quả.
+            Hãy chấm và phản hồi logic với vai trò là AI giáo dục hỗ trợ cho học sinh, khuyến khích học sinh áp dụng quy trình: 
+            xác định nguyên nhân – thử giải pháp – đánh giá kết quả.
             """
             result = generate_text(prompt, generation_config={"max_output_tokens": 2048, "temperature": 0.75})
             return jsonify({"station": 5, "feedback": result})
