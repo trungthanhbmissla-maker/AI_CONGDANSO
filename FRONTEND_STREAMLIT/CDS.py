@@ -6,11 +6,15 @@ import time
 from PIL import Image
 import os
 from pathlib import Path
+from streamlit_autorefresh import st_autorefresh
+import streamlit.components.v1 as components 
+
 
 # đảm bảo luôn có URL mặc định
 if "BACKEND_URL" not in st.session_state or not st.session_state["BACKEND_URL"]:
-    st.session_state["BACKEND_URL"] = "http://127.0.0.1:8000"
-
+    #st.session_state["BACKEND_URL"] = "http://127.0.0.1:8000"#Chạy local thì thay lại
+    st.session_state["BACKEND_URL"] = "https://ai-congdanso-backend.onrender.com/" #Chạy Online
+    
 # ===================== CẤU HÌNH TRANG =====================
 PRIMARY_COLOR = "#004A8F"
 ACCENT_COLOR = "#0064C8"
@@ -142,7 +146,7 @@ with st.sidebar:
     )
     backend_input = st.text_input(
         "Backend URL",
-        value=st.session_state.get('BACKEND_URL', "http://127.0.0.1:8000")
+        value=st.session_state.get('BACKEND_URL', "https://ai-congdanso-backend.onrender.com/")
     )
     if backend_input:
         st.session_state['BACKEND_URL'] = backend_input
@@ -179,7 +183,7 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-st.markdown("### 🚀 Nào, hãy cùng bắt đầu chương trình huấn luyện!")
+st.markdown("### 🚀 Nào, hãy cùng CHIRON26 bắt đầu chương trình huấn luyện!")
 
 # ===================== FIX: GỘP preprocess=====================
 def preprocess_task_text(text: str):
@@ -414,110 +418,220 @@ def render_station(i, endpoint, desc):
             st.empty()
         return
     
-    # TASK MODE: Trạm 1,2,4,5 (indices 0,1,3,4)
+# ================= TASK MODE: Trạm 1,2,4,5 =================
+    # ================= ⏱️ TÍNH TOÁN THỜI GIAN =================
+    start_time = st.session_state.get(f"start_time_{i}")
+    TOTAL_TIME = 300  # 5 phút
+    
+    # Kiểm tra xem đã nộp bài chưa
+    is_submitted = st.session_state.get(f"result_{i}") is not None
+
+    if start_time and not is_submitted:
+        # Nếu đang làm bài: Tính thời gian trôi qua
+        elapsed = int(time.time() - start_time)
+        remaining = max(0, TOTAL_TIME - elapsed)
+        time_up = remaining == 0
+    elif is_submitted:
+        # Nếu đã nộp bài: Dừng thời gian tại thời điểm nộp (Hoặc chỉ cần hiện 0 để báo xong)
+        # Ở đây ta set time_up = True để khóa các nút, nhưng không hiện màu đỏ cảnh báo
+        remaining = 0 
+        time_up = False 
+    else:
+        remaining = TOTAL_TIME
+        time_up = False
+
+    # ================= BẮT ĐẦU GIAO DIỆN =================
+    
+    # --- CỘT TRÁI: ĐỀ BÀI ---
     with col_left:
         gen_key = f"gen_{i}"
         
-        # --- Nút bấm sinh nhiệm vụ ---
-        if st.button(f"🎲 Sinh nhiệm vụ tại Trạm {i+1}", key=gen_key):
+        # Nút sinh nhiệm vụ
+        # Nếu đang làm (chưa nộp và chưa hết giờ) thì không được sinh lại để tránh reset giờ
+        disable_gen = (start_time is not None and not time_up and not is_submitted)
+        
+        if st.button(f"🎲 Sinh nhiệm vụ tại Trạm {i+1}", key=gen_key, disabled=disable_gen, type="primary"):
             st.session_state[f"feedback_{i}"] = ""
-            st.session_state[f"displayed_task_{i}"] = ""
+            st.session_state[f"result_{i}"] = None
+            # Reset lựa chọn radio
+            st.session_state[f"q1_{i}"] = "A" 
+            st.session_state[f"q2_{i}"] = "A"
+            
             try:
-                with st.spinner("CHIRON26 đang tạo nhiệm vụ..."):
+                with st.spinner("Đang tạo đề bài..."):
                     res = requests.post(
                         f"{BACKEND_URL}/api/{endpoint}",
                         json={"mode": "generate_task"},
                         timeout=60
                     )
-                    if res.status_code == 200:
-                        raw = res.json().get("response", "")
-                        
-                        # [QUAN TRỌNG] Bước làm sạch dữ liệu để cắt bỏ Đáp án/Giải thích
-                        clean = preprocess_task_text(raw) 
-                        
-                        st.session_state[f"task_{i}"] = clean
-                    else:
-                        st.error(f"❌ Lỗi API: {res.status_code}")
-                        st.session_state[f"task_{i}"] = ""
-            except Exception as e:
-                st.error("⚠️ Không thể kết nối backend.")
-                st.session_state[f"task_{i}"] = ""
+                if res.status_code == 200:
+                    raw = res.json().get("response", "")
+                    clean = preprocess_task_text(raw)
+                    st.session_state[f"task_{i}"] = clean
+                    st.session_state[f"start_time_{i}"] = time.time()
+                    st.rerun()
+                else:
+                    st.error("Lỗi API.")
+            except Exception:
+                st.error("Lỗi kết nối.")
 
-        # --- Hiển thị nhiệm vụ ---
-        current_task = st.session_state.get(f"task_{i}", "")
-        
+        # Hiển thị nội dung
+        current_task = st.session_state.get(f"task_{i}")
         if current_task:
             st.markdown("### 🧩 Nhiệm vụ của bạn:")
+            st.markdown(generate_formatted_html(current_task), unsafe_allow_html=True)
 
-            st.markdown("<div class='task-box'>", unsafe_allow_html=True)
-
-            # [QUAN TRỌNG] Thay hàm display_static_task cũ bằng hàm làm đẹp HTML mới
-            # Hàm này sẽ chuyển text thô thành HTML đẹp, in đậm tiêu đề, in hoa...
-            formatted_html = generate_formatted_html(current_task)
-            
-            st.markdown(formatted_html, unsafe_allow_html=True)
-            
-            # Lưu trạng thái
-            st.session_state[f"displayed_task_{i}"] = current_task
-
-            st.markdown("</div>", unsafe_allow_html=True)
-            st.markdown("<div class='small-note'>Gợi ý: Nhập đáp án ở khung phải (mỗi đáp án một dòng).</div>", unsafe_allow_html=True)
-
-    # RIGHT COLUMN: answer input and submit
+    # --- CỘT PHẢI: ĐỒNG HỒ & TRẮC NGHIỆM ---
+ 
     with col_right:
-        st.markdown("<div class='answer-sticky'><div class='answer-box'>", unsafe_allow_html=True)
-
-        # separate widget key (for the textarea) and storage key (answer_value_{i})
-        answer_storage_key = f"answer_value_{i}"
-        answer_widget_key = f"ans_widget_{i}"
-
-        # init storage
-        if answer_storage_key not in st.session_state:
-            st.session_state[answer_storage_key] = ""
-
-        # ensure widget reflects stored value (so switching stations keeps text)
-        # Use value through session_state to avoid conflict
-        answer_text = st.text_area(
-            "✏️ Nhập câu trả lời (vd: 1A)",
-            value=st.session_state.get(answer_storage_key, ""),
-            key=answer_widget_key,
-            height=150
-        )
-
-        # keep storage in sync with widget
-        st.session_state[answer_storage_key] = answer_text
-
-        # Submit button
-        submit_key = f"submit_{i}"
-        if st.button("📤 Nộp bài", key=submit_key):
-            if not answer_text.strip():
-                st.warning("Bạn chưa nhập đáp án!")
+        
+        # 1. ĐỒNG HỒ
+        if st.session_state.get(f"task_{i}"):
+            if is_submitted:
+                st.markdown(
+                    """
+                    <div style="background:#e5e7eb; color:#374151; padding:10px; border-radius:8px; text-align:center; font-weight:bold; margin-bottom:15px;">
+                        ⏹️ Đã nộp bài
+                    </div>
+                    """, unsafe_allow_html=True
+                )
+            elif time_up:
+                st.markdown(
+                    """
+                    <div style="background:#ef4444; color:white; padding:10px; border-radius:8px; text-align:center; font-weight:bold; margin-bottom:15px;">
+                        🛑 HẾT GIỜ
+                    </div>
+                    """, unsafe_allow_html=True
+                )
             else:
-                task_text = st.session_state.get(f"task_{i}", "")
-                try:
-                    res = requests.post(
-                        f"{BACKEND_URL}/api/{endpoint}",
-                        json={"mode": "evaluate", "answer": answer_text, "task": task_text},
-                        timeout=60
-                    )
-                    if res.status_code == 200:
-                        fb = res.json().get("feedback", "Không có phản hồi.")
-                    else:
-                        fb = f"⚠️ Lỗi backend: {res.status_code}"
-                except Exception as e:
-                    fb = "⚠️ Lỗi kết nối backend."
+                timer_html_code = f"""
+                <div id="timer-box" style="background-color: #004A8F; color: white; padding: 10px; border-radius: 8px; text-align: center; font-weight: bold; font-family: sans-serif; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                    <span id="timer-display">⏱️ Loading...</span>
+                </div>
+                <script>
+                    var timeleft = {remaining};
+                    function updateTimer() {{
+                        if(timeleft <= 0){{
+                            document.getElementById("timer-display").innerHTML = "🛑 HẾT GIỜ";
+                            document.getElementById("timer-box").style.backgroundColor = "#ef4444";
+                        }} else {{
+                            var m = Math.floor(timeleft / 60);
+                            var s = timeleft % 60;
+                            var mStr = m < 10 ? "0" + m : m;
+                            var sStr = s < 10 ? "0" + s : s;
+                            document.getElementById("timer-display").innerHTML = "⏱️ " + mStr + ":" + sStr;
+                            timeleft -= 1;
+                        }}
+                    }}
+                    updateTimer();
+                    setInterval(updateTimer, 1000);
+                </script>
+                """
+                components.html(timer_html_code, height=50)
+        else:
+            st.empty()
 
-                # store feedback and keep user's answers
-                st.session_state[f"feedback_{i}"] = fb
-                st.session_state[answer_storage_key] = answer_text
+        # 2. KHUNG TRẢ LỜI (RADIO BUTTON)
+        if st.session_state.get(f"task_{i}"):
+            with st.container():
+                st.markdown("#### ✏️ Chọn đáp án:")
+                
+                c1, c2 = st.columns(2)
+                disable_input = time_up or is_submitted
+                
+                with c1:
+                    st.markdown("**Câu 1:**")
+                    ans1 = st.radio("Câu 1", ["A", "B"], key=f"q1_{i}", horizontal=True, label_visibility="collapsed", disabled=disable_input)
+                
+                with c2:
+                    st.markdown("**Câu 2:**")
+                    ans2 = st.radio("Câu 2", ["A", "B"], key=f"q2_{i}", horizontal=True, label_visibility="collapsed", disabled=disable_input)
 
-        # show feedback if exists
-        if st.session_state.get(f"feedback_{i}"):
-            st.markdown("### 📢 Phản hồi:")
-            st.success(st.session_state[f"feedback_{i}"])
+                final_answer_text = f"1{ans1}, 2{ans2}"
 
-        st.markdown("</div></div>", unsafe_allow_html=True)
+                # 3. NÚT NỘP BÀI
+                st.markdown("<div style='height:10px'></div>", unsafe_allow_html=True)
+                
+                if not is_submitted:
+                    if st.button("📤 Nộp bài", key=f"submit_{i}", disabled=disable_input, type="primary"):
+                        should_rerun = False 
+                        
+                        with st.spinner("Đang chấm..."):
+                            try:
+                                res = requests.post(
+                                    f"{BACKEND_URL}/api/{endpoint}",
+                                    json={"mode": "evaluate", "answer": final_answer_text, "task": current_task},
+                                    timeout=60
+                                )
+                                fb = res.json().get("feedback", "")
+                                
+                                # --- LOGIC CHẤM ĐIỂM NGHIÊM NGẶT (CHỈ DÙNG SCORE) ---
+                                is_perfect = False
+                                
+                                # 1. Tìm dòng SCORE: x/y (Ví dụ: SCORE: 0/2, SCORE: 2/2)
+                                score_match = re.search(r"SCORE:\s*(\d+)/(\d+)", fb, re.IGNORECASE)
+                                
+                                if score_match:
+                                    num_correct = int(score_match.group(1)) # Số câu đúng
+                                    total = int(score_match.group(2))       # Tổng số câu
+                                    
+                                    # Chỉ Đạt khi đúng Tuyệt đối (ví dụ 2/2)
+                                    if num_correct == total and total > 0:
+                                        is_perfect = True
+                                    
+                                    # Xóa dòng SCORE khô khan khỏi nội dung hiển thị
+                                    display_feedback = re.sub(r"SCORE:.*\n?", "", fb, flags=re.IGNORECASE).strip()
+                                else:
+                                    # 2. TRƯỜNG HỢP KHẨN CẤP: AI không trả về SCORE
+                                    # Mặc định là FALSE (Chưa đạt) để an toàn, không cho pass bừa.
+                                    is_perfect = False 
+                                    display_feedback = fb
+                                    # Có thể thêm dòng cảnh báo nếu muốn
+                                    # display_feedback = "⚠️ Lỗi định dạng chấm điểm.\n\n" + fb
+                                
+                                st.session_state[f"result_{i}"] = {
+                                    "passed": is_perfect, 
+                                    "feedback": display_feedback
+                                }
+                                should_rerun = True
+                                
+                            except Exception as e:
+                                st.error(f"Lỗi kết nối: {e}")
+                        
+                        if should_rerun:
+                            st.rerun()
 
+        # 4. HIỂN THỊ KẾT QUẢ
+        result = st.session_state.get(f"result_{i}")
+        if result:
+            st.markdown("---")
+            if result["passed"]:
+                st.markdown(
+                    """
+                    <div style="background-color:#dcfce7; color:#166534; padding:12px; border-radius:8px; border:1px solid #22c55e; text-align:center;">
+                        🎉 <b>XUẤT SẮC! (ĐÚNG 100%)</b>
+                    </div>
+                    """, unsafe_allow_html=True
+                )
+            else:
+                st.markdown(
+                    """
+                    <div style="background-color:#fee2e2; color:#991b1b; padding:12px; border-radius:8px; border:1px solid #ef4444; text-align:center;">
+                        ⚠️ <b>CHƯA ĐẠT</b><br>
+                        <span style="font-size:13px;">(Cần đúng 100% mới được tính là Đạt)</span>
+                    </div>
+                    """, unsafe_allow_html=True
+                )
+            
+           
+            st.markdown(
+                f"""
+                <div style='margin-top:10px; font-size:14px; color:#065f46; background:#f0fff4; padding:15px; border-radius:8px; border: 1px solid #bbf7d0;'>
+                    <b>🤖 Để CHIRON26 gợi ý thêm cho bạn nhé:</b><br>{result['feedback']}
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
 
 # ===================== ROUTER: lấy trạm được chọn ở sidebar =====================
 selected_label = station_choice
