@@ -14,6 +14,18 @@ app = Flask(__name__)
 CORS(app)
 
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
+
+if not GOOGLE_API_KEY or not GOOGLE_API_KEY.strip():
+    raise RuntimeError("❌ GOOGLE_API_KEY chưa được set trong môi trường (Render / .env)")
+
+try:
+    genai.configure(api_key=GOOGLE_API_KEY)
+    print("✅ Gemini API configured OK")
+except Exception as e:
+    print(f"❌ Lỗi cấu hình Gemini API: {e}")
+    raise
+    
+'''GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 if not GOOGLE_API_KEY or GOOGLE_API_KEY.strip() == "":
     GOOGLE_API_KEY = "AIzaSyxxxxxxxxxxxxxxxxxxxxxxxxxxxx" #Đưa lên onrender cần thay đổi để không lộ key
     print("⚠️ Không tìm thấy GOOGLE_API_KEY trong .env → đang dùng key dự phòng trong code.")
@@ -26,7 +38,7 @@ try:
     print("✅ Cấu hình Gemini API thành công.")
 except Exception as e:
     print(f"❌ Lỗi khi cấu hình Gemini API: {e}")
-    raise
+    raise'''
 
 MODELS_TO_TRY = [
     "gemini-2.5-flash",
@@ -467,4 +479,5 @@ def home():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8000))
     app.run(host="0.0.0.0", port=port, debug=False)
+
 
