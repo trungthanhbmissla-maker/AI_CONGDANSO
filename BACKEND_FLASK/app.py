@@ -215,7 +215,7 @@ def station1_info_literacy():
             
             QUAN TRỌNG: KHÔNG được kèm theo đáp án đúng hay lời giải thích ở cuối (để học sinh tự làm).
             """
-            result = generate_text(prompt, generation_config={"max_output_tokens": 2048, "temperature": 0.8})
+            result = generate_text(prompt, generation_config={"max_output_tokens": 2048, "temperature": 0.5})
             return jsonify({"station": 1, "response": result})
 
         elif mode == "evaluate":
@@ -238,7 +238,7 @@ def station1_info_literacy():
             
             (Trong đó x là số câu đúng. Ví dụ: SCORE: 0/2, SCORE: 1/2, SCORE: 2/2).
             
-            Sau dòng SCORE mới được viết giải thích chi tiết vì sao đúng/sai.
+            Sau dòng SCORE mới được viết giải thích chi tiết dưới 100 từ vì sao đúng/sai.
             """
             
             # Giảm temperature xuống 0.5 để chấm điểm chính xác, không "văn vở"
@@ -270,7 +270,7 @@ def station2_digital_collab():
             Hãy tạo **2 tình huống ngắn (2–3 câu)** về học sinh làm việc nhóm trực tuyến,
             mỗi tình huống có **một câu hỏi trắc nghiệm A/B** để học sinh chọn cách ứng xử đúng.
             """
-            result = generate_text(prompt, generation_config={"max_output_tokens": 2048, "temperature": 0.85})
+            result = generate_text(prompt, generation_config={"max_output_tokens": 2048, "temperature": 0.5})
             return jsonify({"station": 2, "response": result})
 
         elif mode == "evaluate":
@@ -281,9 +281,9 @@ def station2_digital_collab():
             Câu trả lời của học sinh:
             {answer}
 
-            Hãy chấm và phản hồi ngắn gọn, nêu điểm mạnh/yếu trong hợp tác số.
+            Hãy chấm và phản hồi ngắn gọn dưới 100 từ, nêu điểm mạnh/yếu trong hợp tác số.
             """
-            result = generate_text(prompt, generation_config={"max_output_tokens": 2048, "temperature": 0.75})
+            result = generate_text(prompt, generation_config={"max_output_tokens": 2048, "temperature": 0.5})
             return jsonify({"station": 2, "feedback": result})
 
         else:
@@ -347,7 +347,7 @@ def station4_safety():
             (Tương tự cho Tình huống 2)
             QUAN TRỌNG: KHÔNG được viết đáp án đúng hay giải thích ở cuối.
             """
-            result = generate_text(prompt, generation_config={"max_output_tokens": 2048, "temperature": 0.8})
+            result = generate_text(prompt, generation_config={"max_output_tokens": 2048, "temperature": 0.5})
             return jsonify({"station": 4, "response": result})
 
         elif mode == "evaluate":
@@ -371,7 +371,7 @@ def station4_safety():
             
             (Trong đó x là số câu đúng. Ví dụ: SCORE: 0/2, SCORE: 1/2, SCORE: 2/2).
             
-            Sau dòng SCORE mới được viết phần giải thích chi tiết đúng/sai cho từng câu.
+            Sau dòng SCORE mới được viết phần giải thích chi tiết đúng/sai cho từng câu khoảng 50 từ.
             KHÔNG chúc mừng nếu học sinh làm sai.
             """
             
@@ -414,10 +414,10 @@ def station5_problem_solving():
             Câu trả lời của học sinh:
             {answer}
 
-            Hãy chấm và phản hồi logic với vai trò là AI giáo dục hỗ trợ cho học sinh, khuyến khích học sinh áp dụng quy trình: 
+            Hãy chấm và phản hồi (dưới 100 từ)logic với vai trò là AI giáo dục hỗ trợ cho học sinh, khuyến khích học sinh áp dụng quy trình: 
             xác định nguyên nhân – thử giải pháp – đánh giá kết quả.
             """
-            result = generate_text(prompt, generation_config={"max_output_tokens": 2048, "temperature": 0.75})
+            result = generate_text(prompt, generation_config={"max_output_tokens": 2048, "temperature": 0.5})
             return jsonify({"station": 5, "feedback": result})
 
         else:
@@ -479,5 +479,6 @@ def home():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8000))
     app.run(host="0.0.0.0", port=port, debug=False)
+
 
 
