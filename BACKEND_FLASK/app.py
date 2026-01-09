@@ -265,24 +265,33 @@ def station2_digital_collab():
         task = data.get("task", "")
 
         if mode == "generate_task":
+            prompt = """
+            Bạn là AI giáo dục CHIRON26 giúp học sinh huấn luyện kỹ năng giao tiếp & hợp tác trong môi trường số.
+            Hãy tạo **2 tình huống ngắn (2–3 câu)** về học sinh làm việc nhóm trực tuyến,
+            mỗi tình huống có **một câu hỏi trắc nghiệm A/B** để học sinh chọn cách ứng xử đúng.
+            """
+            result = generate_text(prompt, generation_config={"max_output_tokens": 2048, "temperature": 0.5})
+            return jsonify({"station": 2, "response": result})
+
+        elif mode == "evaluate":
             prompt = f"""
             Bạn là giám khảo chấm thi trắc nghiệm về GIAO TIẾP & HỢP TÁC SỐ.
-            
+
             1. ĐỀ BÀI:
             {task}
-            
+
             2. HỌC SINH CHỌN:
             {answer}
-            
+
             3. YÊU CẦU:
             - Xác định đáp án đúng cho từng tình huống.
             - So sánh với lựa chọn của học sinh.
             - Đếm số câu đúng (trên tổng số 2 câu).
-            
+
             4. ĐỊNH DẠNG TRẢ LỜI BẮT BUỘC (Dòng đầu tiên):
             SCORE: x/2
-            
-            Sau dòng SCORE mới được viết phần nhận xét chi tiết.
+
+            Sau dòng SCORE mới được viết phần nhận xét chi tiết, ngắn gọn, xúc tích khoảng 100 từ.
             """
             result = generate_text(prompt, generation_config={"max_output_tokens": 2048, "temperature": 0.5})
             return jsonify({"station": 2, "response": result})
@@ -412,39 +421,34 @@ def station5_problem_solving():
         task = data.get("task", "")
 
         if mode == "generate_task":
-            prompt = f"""
-            Bạn là giám khảo chấm thi trắc nghiệm về GIẢI QUYẾT VẤN ĐỀ SỐ.
-            
-            1. ĐỀ BÀI:
-            {task}
-            
-            2. HỌC SINH CHỌN:
-            {answer}
-            
-            3. YÊU CẦU:
-            - Xác định phương án xử lý đúng cho từng tình huống.
-            - So sánh với câu trả lời của học sinh.
-            - Đếm số câu đúng (trên tổng số 2 câu).
-            
-            4. ĐỊNH DẠNG TRẢ LỜI BẮT BUỘC (Dòng đầu tiên):
-            SCORE: x/2
-            
-            Sau đó mới được viết nhận xét, không lan man.
+            prompt = """
+            Bạn là AI giáo dục CHIRON26 giúp học sinh huấn luyện kỹ năng giải quyết vấn đề bằng công nghệ số.
+            Hãy tạo **2 tình huống (3–4 câu)** mô tả sự cố kỹ thuật (mất dữ liệu, lỗi phần mềm...),
+            mỗi tình huống có một câu hỏi trắc nghiệm A/B gợi ý cách xử lý.
             """
-            result = generate_text(prompt, generation_config={"max_output_tokens": 2048, "temperature": 0.8})
+            result = generate_text(prompt, generation_config={"max_output_tokens": 2048, "temperature": 0.5})
             return jsonify({"station": 5, "response": result})
 
         elif mode == "evaluate":
             prompt = f"""
-            Nhiệm vụ:
+            Bạn là giám khảo chấm thi trắc nghiệm về GIẢI QUYẾT VẤN ĐỀ SỐ.
+
+            1. ĐỀ BÀI:
             {task}
 
-            Câu trả lời của học sinh:
+            2. HỌC SINH CHỌN:
             {answer}
 
-            Hãy chấm và phản hồi (dưới 100 từ)logic với vai trò là AI giáo dục hỗ trợ cho học sinh, khuyến khích học sinh áp dụng quy trình: 
-            xác định nguyên nhân – thử giải pháp – đánh giá kết quả.
-            """
+            3. YÊU CẦU:
+            - Xác định phương án xử lý đúng cho từng tình huống.
+            - So sánh với câu trả lời của học sinh.
+            - Đếm số câu đúng (trên tổng số 2 câu).
+
+            4. ĐỊNH DẠNG TRẢ LỜI BẮT BUỘC (Dòng đầu tiên):
+            SCORE: x/2
+
+            Sau đó mới được viết nhận xét, không lan man, xúc tích khoảng 100 từ.
+            """ 
             result = generate_text(prompt, generation_config={"max_output_tokens": 2048, "temperature": 0.5})
             return jsonify({"station": 5, "feedback": result})
 
@@ -507,6 +511,7 @@ def home():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8000))
     app.run(host="0.0.0.0", port=port, debug=False)
+
 
 
 
