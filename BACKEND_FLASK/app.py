@@ -293,10 +293,10 @@ def station2_digital_collab():
             
             (Trong đó x là số câu đúng. Ví dụ: SCORE: 0/2, SCORE: 1/2, SCORE: 2/2).
             
-            Sau dòng SCORE mới được viết giải thích chi tiết dưới 100 từ vì sao đúng/sai.
+            Sau dòng SCORE mới được viết giải thích chi tiết dưới 100 từ vì sao đúng/sai cho từng câu.
             """
             result = generate_text(prompt, generation_config={"max_output_tokens": 2048, "temperature": 0.5})
-            return jsonify({"station": 2, "response": result})
+            return jsonify({"station": 2, "feedback": result})
             
         else:
             return jsonify({"error": "Invalid mode"}), 400
@@ -500,6 +500,7 @@ def home():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8000))
     app.run(host="0.0.0.0", port=port, debug=False)
+
 
 
 
